@@ -4,9 +4,11 @@
         "CDPATH",
         "clippy",
         "dtolnay",
+        "DTRT",
         "rustfmt",
         "tempdir",
         "tempfile",
+        "thiserror",
         "withd"
     ]
 }

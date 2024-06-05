@@ -1,12 +1,13 @@
-use std::env::set_current_dir;
+use std::env::{self, set_current_dir};
 use std::fs::create_dir_all;
-use std::io::{Error, ErrorKind, Result};
+use std::io;
 use std::process::{exit, Command};
-use std::{ffi::OsString, path::PathBuf};
+use std::{ffi::OsString, path::Path, path::PathBuf};
 
 use bstr::ByteSlice;
 use clap::{command, Parser};
-use tempfile::TempDir;
+use lazy_regex::bytes_regex_captures;
+use tempfile::{Builder as TempBuilder, TempDir};
 
 #[derive(Parser)]
 #[command(
@@ -15,7 +16,9 @@ use tempfile::TempDir;
 )]
 struct Options {
     #[arg(help = "The directory in which to execute the command.")]
-    directory: PathBuf,
+    // NOTE: This is `OsString` because, at present, `clap` does not allow for
+    // empty `PathBuf` values – it immediately raises an error.
+    directory: OsString,
 
     #[arg(
         short,
@@ -46,13 +49,32 @@ struct Options {
 
 fn main() {
     let options = Options::parse();
-    exit(run(options).unwrap_or_else(io_error_to_exit_code));
+    exit(run(options).unwrap_or_else(|error| error.into()));
 }
+
+#[derive(Debug, thiserror::Error)]
+enum Error {
+    #[error("I/O error: {0}")]
+    IoError(#[from] io::Error),
+    #[error("UTF-8 error: {0}")]
+    Utf8Error(#[from] bstr::Utf8Error),
+}
+
+impl From<Error> for i32 {
+    fn from(error: Error) -> i32 {
+        match error {
+            Error::IoError(error) => io_error_to_exit_code(error),
+            Error::Utf8Error(_) => 1,
+        }
+    }
+}
+
+type Result<T> = std::result::Result<T, Error>;
 
 /// Execute the command in the specified directory. Works on any platform.
 fn run(options: Options) -> Result<i32> {
     // Change to the requested directory before executing the command.
-    let _guard = change_directory(&options.directory, options.create, options.temporary)?;
+    let _guard = change_directory(&options.directory.into(), options.create, options.temporary)?;
     match Command::new(&options.command).args(&options.args).spawn() {
         Ok(mut child) => match child.wait() {
             Ok(status) => Ok(status.code().unwrap_or(
@@ -65,84 +87,84 @@ fn run(options: Options) -> Result<i32> {
             Err(error) => {
                 // Not entirely sure how we might get here.
                 eprintln!("Could not wait for {:?}: {error}", options.command);
-                Err(error)
+                Err(error)?
             }
         },
         Err(error) => {
             // Presumably the executable wasn't found, or we don't have
             // permission to execute the named command.
-            eprintln!("Could not execute `{:?}`: {error}", options.command);
-            Err(error)
+            eprintln!("Could not execute {:?}: {error}", options.command);
+            Err(error)?
         }
     }
 }
 
 /// Change the current working directory to the specified directory, creating
 /// that directory if requested.
-fn change_directory(directory: &PathBuf, create: bool, temporary: bool) -> Result<Option<TempDir>> {
+fn change_directory(path: &PathBuf, create: bool, temporary: bool) -> Result<Option<TempDir>> {
     if temporary {
-        let (directory, prefix) = match directory.file_name() {
-            None => (Some(directory.as_path()), None),
+        // The methods `from_os_str` and `to_os_str` below come from
+        // `bstr::ByteSlice`. This DTRT on UNIX and Windows.
+        let (directory, builder): (_, TempBuilder) = match path.file_name() {
+            None => (Some(path.as_path()), TempBuilder::new()),
             Some(name) => match <[u8]>::from_os_str(name) {
                 None => {
                     eprintln!("Directory name contains un-decodable parts");
-                    return Err(Error::from(ErrorKind::InvalidInput));
+                    return Err(io::Error::from(io::ErrorKind::InvalidInput))?;
                 }
-                Some(name) => match name.strip_suffix(b"XXXXXX") {
-                    None => (Some(directory.as_path()), None),
-                    Some(prefix) => match prefix.to_os_str() {
-                        Ok(prefix) => (directory.parent(), Some(prefix)),
-                        Err(error) => {
-                            eprintln!("Directory name contains un-encodable parts");
-                            return Err(Error::new(ErrorKind::InvalidInput, error));
-                        }
-                    },
+                Some(name) => match bytes_regex_captures!(r"^(.*?)(X+)(.*?)$", name) {
+                    None => (Some(path.as_path()), TempBuilder::new()),
+                    Some((_, prefix, pattern, suffix)) => {
+                        let mut builder = TempBuilder::new();
+                        builder
+                            .prefix(prefix.to_os_str()?)
+                            .rand_bytes(pattern.len())
+                            .suffix(suffix.to_os_str()?);
+                        (path.parent(), builder)
+                    }
                 },
             },
         };
-        if create {
-            if let Some(directory) = directory {
-                create_dir_all(directory).inspect_err(|error| {
-                    eprintln!("Could not create directory {directory:?}: {error}")
-                })?
-            }
-        }
-        let tempdir = match (directory, prefix) {
-            (Some(directory), Some(prefix)) => TempDir::with_prefix_in(prefix, directory)
-                .inspect_err(|error| {
-                    eprintln!("Could not create temporary directory with prefix {prefix:?} in {directory:?}: {error}")
-                }),
-            (Some(directory), None) => TempDir::new_in(directory)
-                .inspect_err(|error| eprintln!("Could not create temporary directory in {directory:?}: {error}")),
-            (None, Some(prefix)) => TempDir::with_prefix(prefix)
-                .inspect_err(|error| eprintln!("Could not create temporary directory with prefix {prefix:?}: {error}")),
-            (None, None) => TempDir::new()
-                .inspect_err(|error| eprintln!("Could not create temporary directory: {error}")),
-        }?;
-        set_current_dir(&tempdir).inspect_err(|error| {
-            eprintln!("Could not change directory to `{tempdir:?}`: {error}")
-        })?;
-        Ok(Some(tempdir))
-    } else {
-        if create {
+        let directory = directory.and_then(squash_empty_path);
+        if let (Some(directory), true) = (directory, create) {
             create_dir_all(directory).inspect_err(|error| {
                 eprintln!("Could not create directory {directory:?}: {error}")
             })?
         }
-        set_current_dir(directory).inspect_err(|error| {
-            eprintln!("Could not change directory to `{directory:?}`: {error}")
+        let directory = directory.map(Path::to_owned).unwrap_or_else(env::temp_dir);
+        let tempdir = builder.tempdir_in(&directory).inspect_err(|error| {
+            eprintln!("Could not create temporary directory in {directory:?}: {error}")
         })?;
+        set_current_dir(&tempdir)
+            .inspect_err(|error| eprintln!("Could not change directory to {tempdir:?}: {error}"))?;
+        Ok(Some(tempdir))
+    } else {
+        if create {
+            create_dir_all(path)
+                .inspect_err(|error| eprintln!("Could not create directory {path:?}: {error}"))?
+        }
+        set_current_dir(path)
+            .inspect_err(|error| eprintln!("Could not change directory to {path:?}: {error}"))?;
         Ok(None)
     }
 }
 
 /// Return an exit code based on observed behaviour of Bash
 /// (https://www.gnu.org/software/bash/).
-fn io_error_to_exit_code(error: Error) -> i32 {
+fn io_error_to_exit_code(error: io::Error) -> i32 {
     match error.kind() {
-        // [unstable] ErrorKind::ReadOnlyFilesystem => 30,
-        ErrorKind::PermissionDenied => 126,
-        ErrorKind::NotFound => 127,
+        // [unstable] io::ErrorKind::ReadOnlyFilesystem => 30,
+        io::ErrorKind::PermissionDenied => 126,
+        io::ErrorKind::NotFound => 127,
         _ => 1,
+    }
+}
+
+/// Squash an empty path to `None`.
+fn squash_empty_path(path: &Path) -> Option<&Path> {
+    if path.iter().next().is_some() {
+        Some(path)
+    } else {
+        None
     }
 }
