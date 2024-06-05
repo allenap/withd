@@ -48,7 +48,7 @@ struct Options {
 
 fn main() {
     let options = Options::parse();
-    exit(run(options).unwrap_or_else(|error| error.into()));
+    exit(run(options).unwrap_or_else(Into::into));
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -57,15 +57,23 @@ enum Error {
     Utf8(#[from] bstr::Utf8Error),
     #[error("UTF-8 encoding invalid: {0:?}")]
     Utf8Invalid(OsString),
+    #[error("Command terminated by signal")]
+    TerminatedBySignal(i32),
     #[error("I/O error: {0}")]
     Io(#[from] io::Error),
 }
 
+/// Allow for easy conversion of errors to exit codes.
 impl From<Error> for i32 {
     fn from(error: Error) -> i32 {
         match error {
             Error::Utf8(_) => 1,
             Error::Utf8Invalid(_) => 1,
+            Error::TerminatedBySignal(signal_no) => {
+                // Bash (https://www.gnu.org/software/bash/) uses the exit code
+                // 128 + signal number.
+                128 + signal_no
+            }
             Error::Io(error) => {
                 // Codes based on observed behaviour of Bash
                 // (https://www.gnu.org/software/bash/).
@@ -93,13 +101,26 @@ fn run(options: Options) -> Result<i32> {
     };
     match Command::new(&options.command).args(&options.args).spawn() {
         Ok(mut child) => match child.wait() {
-            Ok(status) => Ok(status.code().unwrap_or(
-                // In Bash (https://www.gnu.org/software/bash/), this would be
-                // 128 + signal number. We're not on UNIX and we do not know a
-                // signal number – indeed, that concept may not hold here – so
-                // we go with 130, which corresponds to SIGINT on UNIX 🤷
-                130,
-            )),
+            Ok(status) => match status.code() {
+                Some(code) => Ok(code),
+                None => {
+                    #[cfg(unix)]
+                    {
+                        use std::os::unix::process::ExitStatusExt;
+                        match status.signal() {
+                            Some(signal_no) => Err(Error::TerminatedBySignal(signal_no)),
+                            None => unreachable!("No exit code or signal"),
+                        }
+                    }
+                    #[cfg(not(unix))]
+                    {
+                        // We're not on UNIX and we do not know a signal number
+                        // – indeed, that concept may not hold here – so we go
+                        // with 2, which corresponds to SIGINT on UNIX 🤷
+                        Err(Error::TerminatedBySignal(2))
+                    }
+                }
+            },
             Err(error) => {
                 // Not entirely sure how we might get here.
                 eprintln!("Could not wait for {:?}: {error}", options.command);
