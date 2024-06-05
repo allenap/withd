@@ -1,8 +1,7 @@
 use std::env::{self, set_current_dir};
-use std::fs::create_dir_all;
-use std::io;
 use std::process::{exit, Command};
 use std::{ffi::OsString, path::Path, path::PathBuf};
+use std::{fs::create_dir_all, io};
 
 use bstr::ByteSlice;
 use clap::{command, Parser};
@@ -86,7 +85,12 @@ type Result<T> = std::result::Result<T, Error>;
 /// Execute the command in the specified directory. Works on any platform.
 fn run(options: Options) -> Result<i32> {
     // Change to the requested directory before executing the command.
-    let _guard = ensure_directory(&options.directory.into(), options.create, options.temporary)?;
+    let directory = PathBuf::from(options.directory);
+    let _guard = if options.temporary {
+        ensure_temporary_directory(&directory, options.create).map(Some)?
+    } else {
+        ensure_directory(&directory, options.create).map(|_| None)?
+    };
     match Command::new(&options.command).args(&options.args).spawn() {
         Ok(mut child) => match child.wait() {
             Ok(status) => Ok(status.code().unwrap_or(
@@ -113,55 +117,56 @@ fn run(options: Options) -> Result<i32> {
 
 /// Change the current working directory to the specified directory, creating
 /// that directory if requested.
-fn ensure_directory(path: &PathBuf, create: bool, temporary: bool) -> Result<Option<TempDir>> {
-    if temporary {
-        // The methods `from_os_str` and `to_os_str` below come from
-        // `bstr::ByteSlice`. This DTRT on UNIX and Windows.
-        let (directory, builder): (_, TempBuilder) = match path.file_name() {
-            None => (Some(path.as_path()), TempBuilder::new()),
-            Some(name) => match <[u8]>::from_os_str(name) {
-                None => Err(Error::Utf8Invalid(name.to_owned()))?,
-                Some(name) => match bytes_regex_captures!(r"^(.*?)(X+)(.*?)$", name) {
-                    None => (Some(path.as_path()), TempBuilder::new()),
-                    Some((_, prefix, pattern, suffix)) => {
-                        let mut builder = TempBuilder::new();
-                        builder
-                            .prefix(prefix.to_os_str()?)
-                            .rand_bytes(pattern.len())
-                            .suffix(suffix.to_os_str()?);
-                        (path.parent(), builder)
-                    }
-                },
-            },
-        };
-        let directory = directory.and_then(squash_empty_path);
-        if let (Some(directory), true) = (directory, create) {
-            create_dir_all(directory).inspect_err(|error| {
-                eprintln!("Could not create directory {directory:?}: {error}")
-            })?
-        }
-        let tempdir = if let Some(directory) = directory {
-            builder.tempdir_in(directory).inspect_err(|error| {
-                eprintln!("Could not create temporary directory in {directory:?}: {error}")
-            })?
-        } else {
-            let directory = env::temp_dir();
-            builder.tempdir_in(&directory).inspect_err(|error| {
-                eprintln!("Could not create temporary directory in {directory:?}: {error}")
-            })?
-        };
-        set_current_dir(&tempdir)
-            .inspect_err(|error| eprintln!("Could not change directory to {tempdir:?}: {error}"))?;
-        Ok(Some(tempdir))
-    } else {
-        if create {
-            create_dir_all(path)
-                .inspect_err(|error| eprintln!("Could not create directory {path:?}: {error}"))?
-        }
-        set_current_dir(path)
-            .inspect_err(|error| eprintln!("Could not change directory to {path:?}: {error}"))?;
-        Ok(None)
+fn ensure_directory(path: &Path, create: bool) -> Result<()> {
+    if create {
+        create_dir_all(path)
+            .inspect_err(|error| eprintln!("Could not create directory {path:?}: {error}"))?
     }
+    set_current_dir(path)
+        .inspect_err(|error| eprintln!("Could not change directory to {path:?}: {error}"))?;
+    Ok(())
+}
+
+/// Create a temporary directory and change the current working directory to it,
+/// creating intermediate directories if requested.
+fn ensure_temporary_directory(path: &Path, create: bool) -> Result<TempDir> {
+    // The methods `from_os_str` and `to_os_str` below come from
+    // `bstr::ByteSlice`. This DTRT on UNIX and Windows.
+    let (directory, builder): (_, TempBuilder) = match path.file_name() {
+        None => (Some(path), TempBuilder::new()),
+        Some(name) => match <[u8]>::from_os_str(name) {
+            None => Err(Error::Utf8Invalid(name.to_owned()))?,
+            Some(name) => match bytes_regex_captures!(r"^(.*?)(X+)(.*?)$", name) {
+                None => (Some(path), TempBuilder::new()),
+                Some((_, prefix, pattern, suffix)) => {
+                    let mut builder = TempBuilder::new();
+                    builder
+                        .prefix(prefix.to_os_str()?)
+                        .rand_bytes(pattern.len())
+                        .suffix(suffix.to_os_str()?);
+                    (path.parent(), builder)
+                }
+            },
+        },
+    };
+    let directory = directory.and_then(squash_empty_path);
+    if let (Some(directory), true) = (directory, create) {
+        create_dir_all(directory)
+            .inspect_err(|error| eprintln!("Could not create directory {directory:?}: {error}"))?
+    }
+    let tempdir = if let Some(directory) = directory {
+        builder.tempdir_in(directory).inspect_err(|error| {
+            eprintln!("Could not create temporary directory in {directory:?}: {error}")
+        })?
+    } else {
+        let directory = env::temp_dir();
+        builder.tempdir_in(&directory).inspect_err(|error| {
+            eprintln!("Could not create temporary directory in {directory:?}: {error}")
+        })?
+    };
+    set_current_dir(&tempdir)
+        .inspect_err(|error| eprintln!("Could not change directory to {tempdir:?}: {error}"))?;
+    Ok(tempdir)
 }
 
 /// Squash an empty path to `None`.
