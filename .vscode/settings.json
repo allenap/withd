@@ -1,9 +1,12 @@
 {
     "cSpell.words": [
+        "bstr",
         "CDPATH",
         "clippy",
         "dtolnay",
         "rustfmt",
+        "tempdir",
+        "tempfile",
         "withd"
     ]
 }

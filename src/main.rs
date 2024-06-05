@@ -4,7 +4,9 @@ use std::io::{Error, ErrorKind, Result};
 use std::process::{exit, Command};
 use std::{ffi::OsString, path::PathBuf};
 
+use bstr::ByteSlice;
 use clap::{command, Parser};
+use tempfile::TempDir;
 
 #[derive(Parser)]
 #[command(
@@ -23,6 +25,14 @@ struct Options {
     )]
     create: bool,
 
+    #[arg(
+        short,
+        long,
+        help = "Create a temporary directory within the specified directory.",
+        default_value_t = false
+    )]
+    temporary: bool,
+
     #[arg(help = "The command to execute.")]
     command: OsString,
 
@@ -39,29 +49,10 @@ fn main() {
     exit(run(options).unwrap_or_else(io_error_to_exit_code));
 }
 
-#[cfg(unix)]
-/// Execute the command in the specified directory. This version is specific to
-/// UNIX; specifically, it `exec`s the command, which means that the current
-/// process is replaced.
-fn run(options: Options) -> Result<i32> {
-    use std::os::unix::process::CommandExt;
-    // Change to the requested directory.
-    change_directory(&options.directory, options.create)?;
-    // If everything works correctly, `exec` will diverge.
-    let error = Command::new(&options.command).args(&options.args).exec();
-    // When `exec` fails, we print its error message.
-    eprintln!(
-        "Could not execute `{}`: {error}",
-        options.command.to_string_lossy()
-    );
-    Err(error)
-}
-
-#[cfg(not(unix))]
 /// Execute the command in the specified directory. Works on any platform.
 fn run(options: Options) -> Result<i32> {
     // Change to the requested directory before executing the command.
-    change_directory(&options.directory, options.create)?;
+    let _guard = change_directory(&options.directory, options.create, options.temporary)?;
     match Command::new(&options.command).args(&options.args).spawn() {
         Ok(mut child) => match child.wait() {
             Ok(status) => Ok(status.code().unwrap_or(
@@ -73,20 +64,14 @@ fn run(options: Options) -> Result<i32> {
             )),
             Err(error) => {
                 // Not entirely sure how we might get here.
-                eprintln!(
-                    "Could not wait for `{}`: {error}",
-                    options.command.to_string_lossy()
-                );
+                eprintln!("Could not wait for {:?}: {error}", options.command);
                 Err(error)
             }
         },
         Err(error) => {
             // Presumably the executable wasn't found, or we don't have
             // permission to execute the named command.
-            eprintln!(
-                "Could not execute `{}`: {error}",
-                options.command.to_string_lossy()
-            );
+            eprintln!("Could not execute `{:?}`: {error}", options.command);
             Err(error)
         }
     }
@@ -94,19 +79,60 @@ fn run(options: Options) -> Result<i32> {
 
 /// Change the current working directory to the specified directory, creating
 /// that directory if requested.
-fn change_directory(directory: &PathBuf, create: bool) -> Result<()> {
-    if create {
-        create_dir_all(directory)?
-    }
-    match set_current_dir(directory) {
-        Ok(()) => Ok(()),
-        Err(error) => {
-            eprintln!(
-                "Could not change directory to `{}`: {error}",
-                directory.to_string_lossy()
-            );
-            Err(error)
+fn change_directory(directory: &PathBuf, create: bool, temporary: bool) -> Result<Option<TempDir>> {
+    if temporary {
+        let (directory, prefix) = match directory.file_name() {
+            None => (Some(directory.as_path()), None),
+            Some(name) => match <[u8]>::from_os_str(name) {
+                None => {
+                    eprintln!("Directory name contains un-decodable parts");
+                    return Err(Error::from(ErrorKind::InvalidInput));
+                }
+                Some(name) => match name.strip_suffix(b"XXXXXX") {
+                    None => (Some(directory.as_path()), None),
+                    Some(prefix) => match prefix.to_os_str() {
+                        Ok(prefix) => (directory.parent(), Some(prefix)),
+                        Err(error) => {
+                            eprintln!("Directory name contains un-encodable parts");
+                            return Err(Error::new(ErrorKind::InvalidInput, error));
+                        }
+                    },
+                },
+            },
+        };
+        if create {
+            if let Some(directory) = directory {
+                create_dir_all(directory).inspect_err(|error| {
+                    eprintln!("Could not create directory {directory:?}: {error}")
+                })?
+            }
         }
+        let tempdir = match (directory, prefix) {
+            (Some(directory), Some(prefix)) => TempDir::with_prefix_in(prefix, directory)
+                .inspect_err(|error| {
+                    eprintln!("Could not create temporary directory with prefix {prefix:?} in {directory:?}: {error}")
+                }),
+            (Some(directory), None) => TempDir::new_in(directory)
+                .inspect_err(|error| eprintln!("Could not create temporary directory in {directory:?}: {error}")),
+            (None, Some(prefix)) => TempDir::with_prefix(prefix)
+                .inspect_err(|error| eprintln!("Could not create temporary directory with prefix {prefix:?}: {error}")),
+            (None, None) => TempDir::new()
+                .inspect_err(|error| eprintln!("Could not create temporary directory: {error}")),
+        }?;
+        set_current_dir(&tempdir).inspect_err(|error| {
+            eprintln!("Could not change directory to `{tempdir:?}`: {error}")
+        })?;
+        Ok(Some(tempdir))
+    } else {
+        if create {
+            create_dir_all(directory).inspect_err(|error| {
+                eprintln!("Could not create directory {directory:?}: {error}")
+            })?
+        }
+        set_current_dir(directory).inspect_err(|error| {
+            eprintln!("Could not change directory to `{directory:?}`: {error}")
+        })?;
+        Ok(None)
     }
 }
 
@@ -114,6 +140,7 @@ fn change_directory(directory: &PathBuf, create: bool) -> Result<()> {
 /// (https://www.gnu.org/software/bash/).
 fn io_error_to_exit_code(error: Error) -> i32 {
     match error.kind() {
+        // [unstable] ErrorKind::ReadOnlyFilesystem => 30,
         ErrorKind::PermissionDenied => 126,
         ErrorKind::NotFound => 127,
         _ => 1,
