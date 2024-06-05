@@ -54,17 +54,29 @@ fn main() {
 
 #[derive(Debug, thiserror::Error)]
 enum Error {
-    #[error("I/O error: {0}")]
-    IoError(#[from] io::Error),
     #[error("UTF-8 error: {0}")]
-    Utf8Error(#[from] bstr::Utf8Error),
+    Utf8(#[from] bstr::Utf8Error),
+    #[error("UTF-8 encoding invalid: {0:?}")]
+    Utf8Invalid(OsString),
+    #[error("I/O error: {0}")]
+    Io(#[from] io::Error),
 }
 
 impl From<Error> for i32 {
     fn from(error: Error) -> i32 {
         match error {
-            Error::IoError(error) => io_error_to_exit_code(error),
-            Error::Utf8Error(_) => 1,
+            Error::Utf8(_) => 1,
+            Error::Utf8Invalid(_) => 1,
+            Error::Io(error) => {
+                // Codes based on observed behaviour of Bash
+                // (https://www.gnu.org/software/bash/).
+                match error.kind() {
+                    // [unstable] io::ErrorKind::ReadOnlyFilesystem => 30,
+                    io::ErrorKind::PermissionDenied => 126,
+                    io::ErrorKind::NotFound => 127,
+                    _ => 1,
+                }
+            }
         }
     }
 }
@@ -74,7 +86,7 @@ type Result<T> = std::result::Result<T, Error>;
 /// Execute the command in the specified directory. Works on any platform.
 fn run(options: Options) -> Result<i32> {
     // Change to the requested directory before executing the command.
-    let _guard = change_directory(&options.directory.into(), options.create, options.temporary)?;
+    let _guard = ensure_directory(&options.directory.into(), options.create, options.temporary)?;
     match Command::new(&options.command).args(&options.args).spawn() {
         Ok(mut child) => match child.wait() {
             Ok(status) => Ok(status.code().unwrap_or(
@@ -101,17 +113,14 @@ fn run(options: Options) -> Result<i32> {
 
 /// Change the current working directory to the specified directory, creating
 /// that directory if requested.
-fn change_directory(path: &PathBuf, create: bool, temporary: bool) -> Result<Option<TempDir>> {
+fn ensure_directory(path: &PathBuf, create: bool, temporary: bool) -> Result<Option<TempDir>> {
     if temporary {
         // The methods `from_os_str` and `to_os_str` below come from
         // `bstr::ByteSlice`. This DTRT on UNIX and Windows.
         let (directory, builder): (_, TempBuilder) = match path.file_name() {
             None => (Some(path.as_path()), TempBuilder::new()),
             Some(name) => match <[u8]>::from_os_str(name) {
-                None => {
-                    eprintln!("Directory name contains un-decodable parts");
-                    return Err(io::Error::from(io::ErrorKind::InvalidInput))?;
-                }
+                None => Err(Error::Utf8Invalid(name.to_owned()))?,
                 Some(name) => match bytes_regex_captures!(r"^(.*?)(X+)(.*?)$", name) {
                     None => (Some(path.as_path()), TempBuilder::new()),
                     Some((_, prefix, pattern, suffix)) => {
@@ -131,10 +140,16 @@ fn change_directory(path: &PathBuf, create: bool, temporary: bool) -> Result<Opt
                 eprintln!("Could not create directory {directory:?}: {error}")
             })?
         }
-        let directory = directory.map(Path::to_owned).unwrap_or_else(env::temp_dir);
-        let tempdir = builder.tempdir_in(&directory).inspect_err(|error| {
-            eprintln!("Could not create temporary directory in {directory:?}: {error}")
-        })?;
+        let tempdir = if let Some(directory) = directory {
+            builder.tempdir_in(directory).inspect_err(|error| {
+                eprintln!("Could not create temporary directory in {directory:?}: {error}")
+            })?
+        } else {
+            let directory = env::temp_dir();
+            builder.tempdir_in(&directory).inspect_err(|error| {
+                eprintln!("Could not create temporary directory in {directory:?}: {error}")
+            })?
+        };
         set_current_dir(&tempdir)
             .inspect_err(|error| eprintln!("Could not change directory to {tempdir:?}: {error}"))?;
         Ok(Some(tempdir))
@@ -146,17 +161,6 @@ fn change_directory(path: &PathBuf, create: bool, temporary: bool) -> Result<Opt
         set_current_dir(path)
             .inspect_err(|error| eprintln!("Could not change directory to {path:?}: {error}"))?;
         Ok(None)
-    }
-}
-
-/// Return an exit code based on observed behaviour of Bash
-/// (https://www.gnu.org/software/bash/).
-fn io_error_to_exit_code(error: io::Error) -> i32 {
-    match error.kind() {
-        // [unstable] io::ErrorKind::ReadOnlyFilesystem => 30,
-        io::ErrorKind::PermissionDenied => 126,
-        io::ErrorKind::NotFound => 127,
-        _ => 1,
     }
 }
 
