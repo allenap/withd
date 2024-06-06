@@ -6,8 +6,10 @@ use std::{fs::create_dir_all, io};
 use bstr::ByteSlice;
 use clap::Parser;
 use lazy_regex::bytes_regex_captures;
-use nix::sys::signal::{signal, SigHandler, Signal};
 use tempfile::{Builder as TempBuilder, TempDir};
+
+#[cfg(unix)]
+use nix::sys::signal::{signal, SigHandler, Signal};
 
 mod options;
 
@@ -22,10 +24,11 @@ enum Error {
     Utf8(#[from] bstr::Utf8Error),
     #[error("UTF-8 encoding invalid: {0:?}")]
     Utf8Invalid(OsString),
-    #[error("Command terminated by signal")]
+    #[error("Command terminated by signal ({0})")]
     TerminatedBySignal(i32),
     #[error("I/O error: {0}")]
     Io(#[from] io::Error),
+    #[cfg(unix)]
     #[error("OS error: {0}")]
     Os(#[from] nix::Error),
 }
@@ -51,6 +54,7 @@ impl From<Error> for i32 {
                     _ => 1,
                 }
             }
+            #[cfg(unix)]
             Error::Os(errno) => {
                 // Similar to `Error::Io`, but using `nix::errno::Errno`, this
                 // mimics what Bash might do.
@@ -69,6 +73,7 @@ type Result<T> = std::result::Result<T, Error>;
 /// The signals that this program will ignore. They'll be reenabled for child
 /// processes so that they can receive them as usual – and be terminated most
 /// likely – after which this program can clean up.
+#[cfg(unix)]
 const TERMINATION_SIGNALS: &[Signal] = &[Signal::SIGINT, Signal::SIGQUIT, Signal::SIGTERM];
 
 /// Execute the command in the specified directory. Works on any platform.
