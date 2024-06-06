@@ -1,5 +1,6 @@
 {
     "cSpell.words": [
+        "aarch",
         "bstr",
         "CDPATH",
         "clippy",
@@ -8,10 +9,13 @@
         "ENOENT",
         "EPERM",
         "errno",
+        "lipo",
         "pbcopy",
         "rustfmt",
         "shellsession",
         "signo",
+        "softprops",
+        "Swatinem",
         "tempdir",
         "tempfile",
         "thiserror",
