@@ -26,7 +26,34 @@ pub(crate) struct Options {
     #[arg(
         short,
         long,
-        help = "Create a temporary directory within the specified directory.",
+        help = concat!(
+            "Create a temporary directory within the directory specified by ",
+            "-c/--create."
+        ),
+        long_help = concat!(
+            "Create a temporary directory within the directory specified by ",
+            "-c/--create. This temporary directory will be deleted when the ",
+            "command completes. This option modifies how the -c/--create ",
+            "option behaves: when the last component of the directory given ",
+            "includes any number of 'X's, they will be replaced with a unique ",
+            "string of the same length.",
+            "\n\n",
+            "For example:",
+            "\n\n",
+            "- `withd -tc foo/bar.XXXX.baz` will create the directory `foo` ",
+            "(and will not remove it later on) and a temporary directory ",
+            "inside it called `bar.1234.baz` (where the 1234 is random).",
+            "\n\n",
+            "- `withd -tc foo` will create `foo` as above, and a temporary ",
+            "directory named `.tmp123456` (again, where 123456 is random).",
+            "\n\n",
+            "- `withd -tc foo.XXXX.bar` will create a temporary directory ",
+            "named `foo.1234.bar` in the system's temporary directory, e.g. ",
+            "$TMPDIR",
+            "\n\n",
+            "- `withd -tc \"\"` will create a temporary directory named ",
+            "`.tmp123456` in the system's temporary directory, e.g. $TMPDIR",
+        ),
         default_value_t = false
     )]
     pub(crate) temporary: bool,

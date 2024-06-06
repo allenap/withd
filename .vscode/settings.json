@@ -8,11 +8,14 @@
         "ENOENT",
         "EPERM",
         "errno",
+        "pbcopy",
         "rustfmt",
+        "shellsession",
         "signo",
         "tempdir",
         "tempfile",
         "thiserror",
+        "TMPDIR",
         "withd"
     ]
 }
