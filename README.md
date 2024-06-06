@@ -53,6 +53,18 @@ withd -c /some/where echo "Hello, world!"
 
 (`-c` is short for `--create`.)
 
+## Making a release
+
+1. Bump version in [`Cargo.toml`](Cargo.toml).
+2. Build **and** test. The latter on its own does do a build, but a test build
+   can hide warnings about dead code, so do both.
+   - With default features: `cargo build && cargo test`
+   - Without: `cargo build --no-default-features && cargo test --no-default-features`
+3. Commit with message "Bump version to `$VERSION`."
+4. Tag with "v`$VERSION`", e.g. `git tag v1.0.10`.
+5. Push: `git push && git push --tags`.
+6. Publish: `cargo publish`.
+
 ## License
 
 [GNU General Public License 3.0](https://www.gnu.org/licenses/gpl-3.0.html) (or
