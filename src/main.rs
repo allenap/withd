@@ -1,53 +1,17 @@
 use std::env::{self, set_current_dir};
 use std::process::{exit, Command};
-use std::{ffi::OsString, path::Path, path::PathBuf};
+use std::{ffi::OsString, path::Path};
 use std::{fs::create_dir_all, io};
 
 use bstr::ByteSlice;
-use clap::{command, Parser};
+use clap::Parser;
 use lazy_regex::bytes_regex_captures;
 use tempfile::{Builder as TempBuilder, TempDir};
 
-#[derive(Parser)]
-#[command(
-    author, version, about, long_about = None,
-    after_help = "Execute a command in a specific directory.",
-)]
-struct Options {
-    #[arg(help = "The directory in which to execute the command.")]
-    // NOTE: This is `OsString` because, at present, `clap` does not allow for
-    // empty `PathBuf` values – it immediately raises an error.
-    directory: OsString,
-
-    #[arg(
-        short,
-        long,
-        help = "Create the directory if it does not exist.",
-        default_value_t = false
-    )]
-    create: bool,
-
-    #[arg(
-        short,
-        long,
-        help = "Create a temporary directory within the specified directory.",
-        default_value_t = false
-    )]
-    temporary: bool,
-
-    #[arg(help = "The command to execute.")]
-    command: OsString,
-
-    #[arg(
-        help = "The arguments to pass to the command.",
-        trailing_var_arg = true,
-        allow_hyphen_values = true
-    )]
-    args: Vec<OsString>,
-}
+mod options;
 
 fn main() {
-    let options = Options::parse();
+    let options = options::Options::parse();
     exit(run(options).unwrap_or_else(Into::into));
 }
 
@@ -91,13 +55,12 @@ impl From<Error> for i32 {
 type Result<T> = std::result::Result<T, Error>;
 
 /// Execute the command in the specified directory. Works on any platform.
-fn run(options: Options) -> Result<i32> {
+fn run(options: options::Options) -> Result<i32> {
     // Change to the requested directory before executing the command.
-    let directory = PathBuf::from(options.directory);
     let _guard = if options.temporary {
-        ensure_temporary_directory(&directory, options.create).map(Some)?
+        ensure_temporary_directory(&options.directory, options.create).map(Some)?
     } else {
-        ensure_directory(&directory, options.create).map(|_| None)?
+        ensure_directory(&options.directory, options.create).map(|_| None)?
     };
     match Command::new(&options.command).args(&options.args).spawn() {
         Ok(mut child) => match child.wait() {
