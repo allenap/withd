@@ -6,6 +6,7 @@ use std::{fs::create_dir_all, io};
 use bstr::ByteSlice;
 use clap::Parser;
 use lazy_regex::bytes_regex_captures;
+use nix::sys::signal::{signal, SigHandler, Signal};
 use tempfile::{Builder as TempBuilder, TempDir};
 
 mod options;
@@ -25,6 +26,8 @@ enum Error {
     TerminatedBySignal(i32),
     #[error("I/O error: {0}")]
     Io(#[from] io::Error),
+    #[error("OS error: {0}")]
+    Os(#[from] nix::Error),
 }
 
 /// Allow for easy conversion of errors to exit codes.
@@ -33,10 +36,10 @@ impl From<Error> for i32 {
         match error {
             Error::Utf8(_) => 1,
             Error::Utf8Invalid(_) => 1,
-            Error::TerminatedBySignal(signal_no) => {
+            Error::TerminatedBySignal(signo) => {
                 // Bash (https://www.gnu.org/software/bash/) uses the exit code
                 // 128 + signal number.
-                128 + signal_no
+                128 + signo
             }
             Error::Io(error) => {
                 // Codes based on observed behaviour of Bash
@@ -48,53 +51,94 @@ impl From<Error> for i32 {
                     _ => 1,
                 }
             }
+            Error::Os(errno) => {
+                // Similar to `Error::Io`, but using `nix::errno::Errno`, this
+                // mimics what Bash might do.
+                match errno {
+                    nix::errno::Errno::EPERM => 126,
+                    nix::errno::Errno::ENOENT => 127,
+                    _ => 1,
+                }
+            }
         }
     }
 }
 
 type Result<T> = std::result::Result<T, Error>;
 
+/// The signals that this program will ignore. They'll be reenabled for child
+/// processes so that they can receive them as usual – and be terminated most
+/// likely – after which this program can clean up.
+const TERMINATION_SIGNALS: &[Signal] = &[Signal::SIGINT, Signal::SIGQUIT, Signal::SIGTERM];
+
 /// Execute the command in the specified directory. Works on any platform.
 fn run(options: options::Options) -> Result<i32> {
-    // Change to the requested directory before executing the command.
+    // Ignore signals so that we're not terminated by them. We'll reenable them
+    // later on in the child process, just before exec'ing.
+    #[cfg(unix)]
+    for sig in TERMINATION_SIGNALS {
+        unsafe {
+            signal(*sig, SigHandler::SigIgn)?;
+        }
+    }
+
+    // Change to the requested directory before executing the command. We keep
+    // the guard value around because it might be a temporary directory that
+    // deletes itself on [`Drop`].
     let _guard = if options.temporary {
         ensure_temporary_directory(&options.directory, options.create).map(Some)?
     } else {
         ensure_directory(&options.directory, options.create).map(|_| None)?
     };
-    match Command::new(&options.command).args(&options.args).spawn() {
-        Ok(mut child) => match child.wait() {
-            Ok(status) => match status.code() {
-                Some(code) => Ok(code),
-                None => {
-                    #[cfg(unix)]
-                    {
-                        use std::os::unix::process::ExitStatusExt;
-                        match status.signal() {
-                            Some(signal_no) => Err(Error::TerminatedBySignal(signal_no)),
-                            None => unreachable!("No exit code or signal"),
-                        }
-                    }
-                    #[cfg(not(unix))]
-                    {
-                        // We're not on UNIX and we do not know a signal number
-                        // – indeed, that concept may not hold here – so we go
-                        // with 2, which corresponds to SIGINT on UNIX 🤷
-                        Err(Error::TerminatedBySignal(2))
+
+    // Prepare the command.
+    let mut command = Command::new(&options.command);
+    command.args(&options.args);
+
+    // Reset signal handlers for the child process.
+    #[cfg(unix)]
+    unsafe {
+        use std::os::unix::process::CommandExt;
+        command.pre_exec(|| {
+            for sig in TERMINATION_SIGNALS {
+                signal(*sig, SigHandler::SigDfl)?;
+            }
+            Ok(())
+        });
+    }
+
+    // Execute the command.
+    let mut child = command.spawn().inspect_err(|error| {
+        // Presumably the executable wasn't found, or we don't have permission
+        // to execute the named command.
+        eprintln!("Could not execute {:?}: {error}", options.command);
+    })?;
+
+    match child.wait() {
+        Ok(status) => match status.code() {
+            Some(code) => Ok(code),
+            None => {
+                #[cfg(unix)]
+                {
+                    use std::os::unix::process::ExitStatusExt;
+                    match status.signal() {
+                        Some(signo) => Err(Error::TerminatedBySignal(signo)),
+                        None => unreachable!("No exit code or signal"),
                     }
                 }
-            },
-            Err(error) => {
-                // Not entirely sure how we might get here.
-                eprintln!("Could not wait for {:?}: {error}", options.command);
-                Err(error)?
+                #[cfg(not(unix))]
+                {
+                    // We're not on UNIX and we do not know a signal number –
+                    // indeed, that concept may not hold here – so we go with 2,
+                    // which corresponds to SIGINT on UNIX 🤷
+                    Err(Error::TerminatedBySignal(2))
+                }
             }
         },
         Err(error) => {
-            // Presumably the executable wasn't found, or we don't have
-            // permission to execute the named command.
-            eprintln!("Could not execute {:?}: {error}", options.command);
-            Err(error)?
+            // Not entirely sure how we might get here.
+            eprintln!("Could not wait for {:?}: {error}", options.command);
+            Err(error.into())
         }
     }
 }
