@@ -172,7 +172,6 @@ jobs:
           overwrite: true
       - uses: softprops/action-gh-release@v2
         with:
-          name: ${{ inputs.ref || github.ref }}
           tag_name: ${{ inputs.ref || github.ref }}
           files: |
             withd-apple-darwin-aarch64
