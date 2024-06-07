@@ -94,12 +94,12 @@ jobs:
           sudo apt -y install musl-tools libssl-dev
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: x86_64-unknown-linux-musl, aarch64-unknown-linux-musl
       - uses: Swatinem/rust-cache@v2
+      - name: Install `cross-rs/cross` for cross-compilation of Rust
+        run: cargo install cross@0.2.5
       # Build & upload x86_64.
       - name: Build x86_64
-        run: cargo build --release --target x86_64-unknown-linux-musl
+        run: cross build --release --target x86_64-unknown-linux-musl
       - name: Smoke test x86_64
         run: target/x86_64-unknown-linux-musl/release/withd --help
       - uses: actions/upload-artifact@v4
@@ -109,7 +109,7 @@ jobs:
           if-no-files-found: error
       # Build & upload aarch64.
       - name: Build aarch64
-        run: cargo build --release --target aarch64-unknown-linux-musl
+        run: cross build --release --target aarch64-unknown-linux-musl
       - name: Smoke test aarch64
         run: target/aarch64-unknown-linux-musl/release/withd --help
       - uses: actions/upload-artifact@v4
