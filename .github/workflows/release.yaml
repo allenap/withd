@@ -127,12 +127,10 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           pattern: "*-linux"
-          merge-multiple: true
           path: linux
       - uses: actions/download-artifact@v4
         with:
           pattern: "*-apple-darwin"
-          merge-multiple: true
           path: apple-darwin
       - uses: actions/download-artifact@v4
         with:
@@ -140,10 +138,10 @@ jobs:
       - name: Rename executables
         run: |
           find apple-darwin linux -ls
-          mv -v linux/x86_64-linux/withd withd-linux-x86_64
-          mv -v linux/aarch64-linux/withd withd-linux-aarch64
-          mv -v apple-darwin/x86_64-linux/withd withd-linux-x86_64
           mv -v apple/darwin/aarch64-linux/withd withd-linux-aarch64
+          mv -v apple-darwin/x86_64-linux/withd withd-linux-x86_64
+          mv -v linux/aarch64-linux/withd withd-linux-aarch64
+          mv -v linux/x86_64-linux/withd withd-linux-x86_64
       - uses: actions/upload-artifact@v4
         with:
           pattern: withd-*
