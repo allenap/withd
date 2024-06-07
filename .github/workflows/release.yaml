@@ -136,6 +136,8 @@ jobs:
 
   release:
     name: Create release
+    permissions:
+      contents: write
     needs:
       - apple-darwin-aarch64-binary
       - apple-darwin-x86_64-binary
