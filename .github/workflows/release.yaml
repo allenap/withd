@@ -88,10 +88,6 @@ jobs:
     name: Build Linux
     runs-on: ubuntu-22.04
     steps:
-      - name: Install dev tools
-        run: |
-          sudo apt update
-          sudo apt -y install musl-tools libssl-dev
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
