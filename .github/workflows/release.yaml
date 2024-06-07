@@ -13,7 +13,7 @@ on:
       - "v*"
 
 jobs:
-  aarch64-apple-darwin-release:
+  apple-darwin-aarch64-binary:
     name: Build macOS ARM
     runs-on: macos-latest
     steps:
@@ -34,7 +34,7 @@ jobs:
           path: target/aarch64-apple-darwin/release/withd
           if-no-files-found: error
 
-  x86_64-apple-darwin-release:
+  apple-darwin-x86_64-binary:
     name: Build macOS Intel
     runs-on: macos-latest
     steps:
@@ -55,10 +55,10 @@ jobs:
           path: target/x86_64-apple-darwin/release/withd
           if-no-files-found: error
 
-  macos-universal-release:
+  apple-darwin-universal-binary:
     name: Build macOS Universal
     runs-on: macos-latest
-    needs: [aarch64-apple-darwin-release, x86_64-apple-darwin-release]
+    needs: [apple-darwin-aarch64-binary, apple-darwin-x86_64-binary]
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -70,7 +70,7 @@ jobs:
           path: withd-aarch64-apple-darwin
       - name: debug
         run: find .
-      - name: Build Universal macOS Binary
+      - name: Build Universal macOS binary
         run: |
           lipo -create \
             -output withd-apple-darwin \
@@ -88,27 +88,19 @@ jobs:
           path: withd-apple-darwin
           if-no-files-found: error
 
-  linux-release:
-    name: Build Linux
+  linux-aarch64-binary:
+    name: Build Linux ARM
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref || github.ref }}
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: "v0-cross-aarch64"
       - name: Install `cross-rs/cross` for cross-compilation of Rust
         run: cargo install cross --git https://github.com/cross-rs/cross
-      # Build & upload x86_64.
-      - name: Build x86_64
-        run: cross build --release --target x86_64-unknown-linux-musl
-      - name: Smoke test x86_64
-        run: cross run  --release --target x86_64-unknown-linux-musl -- --help
-      - uses: actions/upload-artifact@v4
-        with:
-          name: x86_64-linux
-          path: target/x86_64-unknown-linux-musl/release/withd
-          if-no-files-found: error
-      # Build & upload aarch64.
       - name: Build aarch64
         run: cross build --release --target aarch64-unknown-linux-musl
       - name: Smoke test aarch64
@@ -119,9 +111,37 @@ jobs:
           path: target/aarch64-unknown-linux-musl/release/withd
           if-no-files-found: error
 
-  create-release:
+  linux-x86_64-binary:
+    name: Build Linux Intel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: "v0-cross-x86_64"
+      - name: Install `cross-rs/cross` for cross-compilation of Rust
+        run: cargo install cross --git https://github.com/cross-rs/cross
+      - name: Build x86_64
+        run: cross build --release --target x86_64-unknown-linux-musl
+      - name: Smoke test x86_64
+        run: cross run  --release --target x86_64-unknown-linux-musl -- --help
+      - uses: actions/upload-artifact@v4
+        with:
+          name: x86_64-linux
+          path: target/x86_64-unknown-linux-musl/release/withd
+          if-no-files-found: error
+
+  release:
     name: Create release
-    needs: [macos-universal-release, linux-release]
+    needs:
+      - apple-darwin-aarch64-binary
+      - apple-darwin-x86_64-binary
+      - apple-darwin-universal-binary
+      - linux-aarch64-binary
+      - linux-x86_64-binary
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -153,7 +173,10 @@ jobs:
           name: ${{ inputs.ref || github.ref }}
           tag_name: ${{ inputs.ref || github.ref }}
           files: |
+            withd-apple-darwin-aarch64
+            withd-apple-darwin-x86_64
             withd-apple-darwin
-            withd-linux
+            withd-linux-aarch64
+            withd-linux-x86_64
           fail_on_unmatched_files: true
         if: startsWith(inputs.ref || github.ref, 'refs/tags/')
