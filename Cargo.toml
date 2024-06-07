@@ -24,14 +24,14 @@ nix = { version = "=0.29.0", features = ["signal"], default-features = false }
 # Install musl-tools:arm64, see
 # <https://github.com/cross-rs/cross/blob/main/docs/custom_images.md#adding-dependencies-to-existing-images>
 pre-build = [
-    "dpkg --add-architecture $CROSS_DEB_ARCH",
-    "apt-get update && apt-get --assume-yes install musl-tools:$CROSS_DEB_ARCH",
+    "dpkg --add-architecture amd64",
+    "apt-get update && apt-get --assume-yes install musl-tools:amd64",
 ]
 
 [workspace.metadata.cross.target.aarch64-unknown-linux-musl]
 # Install musl-tools:arm64, see
 # <https://github.com/cross-rs/cross/blob/main/docs/custom_images.md#adding-dependencies-to-existing-images>
 pre-build = [
-    "dpkg --add-architecture $CROSS_DEB_ARCH",
-    "apt-get update && apt-get --assume-yes install musl-tools:$CROSS_DEB_ARCH",
+    "dpkg --add-architecture arm64",
+    "apt-get update && apt-get --assume-yes install musl-tools:arm64",
 ]
