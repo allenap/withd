@@ -91,8 +91,8 @@ jobs:
         run: cargo install cross --git https://github.com/cross-rs/cross
       - name: Build aarch64
         run: cross build --release --target aarch64-unknown-linux-musl
-      - name: Smoke test aarch64
-        run: cross run --release --target aarch64-unknown-linux-musl -- --help
+      - name: Smoke test
+        run: cross run --release --target aarch64-unknown-linux-musl --bin withd -- --help
       - uses: actions/upload-artifact@v4
         with:
           name: aarch64-linux
@@ -112,8 +112,8 @@ jobs:
         run: cargo install cross --git https://github.com/cross-rs/cross
       - name: Build x86_64
         run: cross build --release --target x86_64-unknown-linux-musl
-      - name: Smoke test x86_64
-        run: cross run  --release --target x86_64-unknown-linux-musl -- --help
+      - name: Smoke test
+        run: cross run  --release --target x86_64-unknown-linux-musl --bin withd -- --help
       - uses: actions/upload-artifact@v4
         with:
           name: x86_64-linux
