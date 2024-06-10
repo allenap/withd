@@ -87,6 +87,11 @@ fn run(options: options::Options) -> Result<i32> {
         }
     }
 
+    // Origin/whence directory.
+    let whence_dir = env::current_dir().inspect_err(|error| {
+        eprintln!("Could not determine current directory: {error}");
+    })?;
+
     // Change to the requested directory before executing the command. We keep
     // the guard value around because it might be a temporary directory that
     // deletes itself on [`Drop`].
@@ -98,7 +103,7 @@ fn run(options: options::Options) -> Result<i32> {
 
     // Prepare the command.
     let mut command = Command::new(&options.command);
-    command.args(&options.args);
+    command.args(&options.args).env("WHENCE", &whence_dir);
 
     // Reset signal handlers for the child process.
     #[cfg(unix)]
