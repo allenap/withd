@@ -5,7 +5,7 @@ use clap::{command, Parser};
 
 #[derive(Parser)]
 #[command(
-    author, version, about, long_about = None,
+    author, version, about, long_about = None, max_term_width = 80,
     after_help = concat!(
         "The executed command can use the `WHENCE` environment variable to ",
         "refer back to the directory from whence `withd` was invoked.",
@@ -62,7 +62,7 @@ pub(crate) struct Options {
     )]
     pub(crate) temporary: bool,
 
-    #[arg(help = "The command to execute.")]
+    #[arg(help = "The command to execute.", env = "SHELL")]
     pub(crate) command: OsString,
 
     #[arg(
