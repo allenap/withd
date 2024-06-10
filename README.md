@@ -113,9 +113,9 @@ withd -c /some/where echo "Hello, world!"
 1. Regenerate shell completions: `cargo completions`.
 2. Bump version in [`Cargo.toml`](Cargo.toml).
 3. Paste updated `--help` output into [`README.md`](README.md) (this file; see
-   near the top). On macOS the command `cargo withd --help | pbcopy` is
-   helpful. **Note** that `--help` output is not the same as `-h` output: it's
-   more verbose and that's actually what we want here.
+   near the top). On macOS the command `cargo withd --help | pbcopy` is helpful.
+   **Note** that `--help` output is not the same as `-h` output: it's more
+   verbose and that's actually what we want here.
 4. Build **and** test. The latter on its own does do a build, but a test build
    can hide warnings about dead code, so do both.
    - With default features: `cargo build && cargo test`
