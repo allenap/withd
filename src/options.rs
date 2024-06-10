@@ -1,7 +1,7 @@
 use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
 
-use clap::{command, Parser};
+use clap::{command, Parser, ValueHint};
 
 #[derive(Parser)]
 #[command(
@@ -14,7 +14,8 @@ use clap::{command, Parser};
 pub(crate) struct Options {
     #[arg(
         help = "The directory in which to execute the command.",
-        value_parser = EmptyPathBufValueParser
+        value_parser = EmptyPathBufValueParser,
+        value_hint = ValueHint::AnyPath,
     )]
     pub(crate) directory: PathBuf,
 
@@ -62,15 +63,15 @@ pub(crate) struct Options {
     )]
     pub(crate) temporary: bool,
 
-    #[arg(help = "The command to execute.", env = "SHELL")]
-    pub(crate) command: OsString,
-
     #[arg(
-        help = "The arguments to pass to the command.",
+        help = "The command and its arguments.",
         trailing_var_arg = true,
-        allow_hyphen_values = true
+        allow_hyphen_values = true,
+        value_hint = ValueHint::CommandWithArguments,
+        num_args = 1..,
+        env = "SHELL",
     )]
-    pub(crate) args: Vec<OsString>,
+    pub(crate) command: Vec<OsString>,
 }
 
 // -----------------------------------------------------------------------------

@@ -1,0 +1,3 @@
+[alias]
+withd = "run --bin withd --"
+completions = "run --bin completions --"

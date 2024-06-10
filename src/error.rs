@@ -2,6 +2,8 @@ use std::{ffi::OsString, io};
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum Error {
+    #[error("No command specified and SHELL not set")]
+    NoCommand,
     #[error("UTF-8 error: {0}")]
     Utf8(#[from] bstr::Utf8Error),
     #[error("UTF-8 encoding invalid: {0:?}")]
@@ -19,6 +21,7 @@ pub(crate) enum Error {
 impl From<Error> for i32 {
     fn from(error: Error) -> i32 {
         match error {
+            Error::NoCommand => 1,
             Error::Utf8(_) => 1,
             Error::Utf8Invalid(_) => 1,
             Error::TerminatedBySignal(signo) => {

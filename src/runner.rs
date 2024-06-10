@@ -1,6 +1,5 @@
-use std::env::{self, set_current_dir};
-use std::process::Command;
-use std::{fs::create_dir_all, path::Path};
+use std::{env, process::Command};
+use std::{fs, path::Path};
 
 use bstr::ByteSlice;
 use lazy_regex::bytes_regex_captures;
@@ -46,8 +45,13 @@ pub(crate) fn run(options: options::Options) -> Result<i32> {
     };
 
     // Prepare the command.
-    let mut command = Command::new(&options.command);
-    command.args(&options.args).env("WHENCE", &whence_dir);
+    let executable = options.command.first().ok_or_else(|| {
+        eprintln!("No command specified and SHELL not set.");
+        error::Error::NoCommand
+    })?;
+    let arguments = &options.command[1..];
+    let mut command = Command::new(executable);
+    command.args(arguments).env("WHENCE", &whence_dir);
 
     // Reset signal handlers for the child process.
     #[cfg(unix)]
@@ -65,7 +69,7 @@ pub(crate) fn run(options: options::Options) -> Result<i32> {
     let mut child = command.spawn().inspect_err(|error| {
         // Presumably the executable wasn't found, or we don't have permission
         // to execute the named command.
-        eprintln!("Could not execute {:?}: {error}", options.command);
+        eprintln!("Could not execute {:?}: {error}", executable);
     })?;
 
     match child.wait() {
@@ -91,7 +95,7 @@ pub(crate) fn run(options: options::Options) -> Result<i32> {
         },
         Err(error) => {
             // Not entirely sure how we might get here.
-            eprintln!("Could not wait for {:?}: {error}", options.command);
+            eprintln!("Could not wait for {:?}: {error}", executable);
             Err(error.into())
         }
     }
@@ -101,10 +105,10 @@ pub(crate) fn run(options: options::Options) -> Result<i32> {
 /// that directory if requested.
 fn ensure_directory(path: &Path, create: bool) -> Result<()> {
     if create {
-        create_dir_all(path)
+        fs::create_dir_all(path)
             .inspect_err(|error| eprintln!("Could not create directory {path:?}: {error}"))?
     }
-    set_current_dir(path)
+    env::set_current_dir(path)
         .inspect_err(|error| eprintln!("Could not change directory to {path:?}: {error}"))?;
     Ok(())
 }
@@ -133,7 +137,7 @@ fn ensure_temporary_directory(path: &Path, create: bool) -> Result<TempDir> {
     };
     let directory = directory.and_then(squash_empty_path);
     if let (Some(directory), true) = (directory, create) {
-        create_dir_all(directory)
+        fs::create_dir_all(directory)
             .inspect_err(|error| eprintln!("Could not create directory {directory:?}: {error}"))?
     }
     let tempdir = if let Some(directory) = directory {
@@ -146,7 +150,7 @@ fn ensure_temporary_directory(path: &Path, create: bool) -> Result<TempDir> {
             eprintln!("Could not create temporary directory in {directory:?}: {error}")
         })?
     };
-    set_current_dir(&tempdir)
+    env::set_current_dir(&tempdir)
         .inspect_err(|error| eprintln!("Could not change directory to {tempdir:?}: {error}"))?;
     Ok(tempdir)
 }
