@@ -1,9 +1,0 @@
-[package]
-name = "completions"
-version = "0.1.0"
-edition = "2021"
-publish = false
-
-[dependencies]
-clap = { workspace = true }
-clap_complete = "=4.5.5"

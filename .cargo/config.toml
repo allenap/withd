@@ -1,2 +1,3 @@
 [alias]
-completions = "run --package completions --"
+withd = "run --bin withd --"
+completions = "run --bin completions --"
