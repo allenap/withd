@@ -5,7 +5,7 @@ use clap::{command, Parser};
 
 #[derive(Parser)]
 #[command(
-    author, version, about, long_about = None,
+    author, version, about, long_about = None, max_term_width = 80,
     after_help = concat!(
         "The executed command can use the `WHENCE` environment variable to ",
         "refer back to the directory from whence `withd` was invoked.",
