@@ -1,0 +1,41 @@
+#compdef withd
+
+autoload -U is-at-least
+
+_withd() {
+    typeset -A opt_args
+    typeset -a _arguments_options
+    local ret=1
+
+    if is-at-least 5.2; then
+        _arguments_options=(-s -S -C)
+    else
+        _arguments_options=(-s -C)
+    fi
+
+    local context curcontext="$curcontext" state line
+    _arguments "${_arguments_options[@]}" : \
+'-c[Create the directory if it does not exist.]' \
+'--create[Create the directory if it does not exist.]' \
+'-t[Create a temporary directory within the directory specified by -c/--create.]' \
+'--temporary[Create a temporary directory within the directory specified by -c/--create.]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+'-V[Print version]' \
+'--version[Print version]' \
+':directory -- The directory in which to execute the command.:_files' \
+'*::command -- The command and its arguments.:_cmdambivalent' \
+&& ret=0
+}
+
+(( $+functions[_withd_commands] )) ||
+_withd_commands() {
+    local commands; commands=()
+    _describe -t commands 'withd commands' commands "$@"
+}
+
+if [ "$funcstack[1]" = "_withd" ]; then
+    _withd "$@"
+else
+    compdef _withd withd
+fi
