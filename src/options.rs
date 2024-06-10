@@ -78,7 +78,7 @@ pub(crate) struct Options {
 #[derive(Copy, Clone)]
 /// [`clap::builder::PathBufValueParser`] has a limitation: it treat empty paths
 /// as errors. This parser allows for empty paths.
-pub struct EmptyPathBufValueParser;
+struct EmptyPathBufValueParser;
 
 impl clap::builder::TypedValueParser for EmptyPathBufValueParser {
     type Value = PathBuf;
