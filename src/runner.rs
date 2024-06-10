@@ -1,9 +1,7 @@
-use std::env::{self, set_current_dir};
-use std::{fs::create_dir_all, path::Path};
-use std::{io::stdout, process::Command};
+use std::{env, process::Command};
+use std::{fs, path::Path};
 
 use bstr::ByteSlice;
-use clap::CommandFactory;
 use lazy_regex::bytes_regex_captures;
 use tempfile::{Builder as TempBuilder, TempDir};
 
@@ -23,13 +21,6 @@ const TERMINATION_SIGNALS: &[Signal] = &[Signal::SIGINT, Signal::SIGQUIT, Signal
 
 /// Execute the command in the specified directory. Works on any platform.
 pub(crate) fn run(options: options::Options) -> Result<i32> {
-    if let Some(shell) = options.completions {
-        let mut command = options::Options::command();
-        let bin_name = command.get_name().to_string();
-        clap_complete::generate(shell, &mut command, bin_name, &mut stdout());
-        return Ok(0);
-    }
-
     // Ignore signals so that we're not terminated by them. We'll reenable them
     // later on in the child process, just before exec'ing.
     #[cfg(unix)]
@@ -114,10 +105,10 @@ pub(crate) fn run(options: options::Options) -> Result<i32> {
 /// that directory if requested.
 fn ensure_directory(path: &Path, create: bool) -> Result<()> {
     if create {
-        create_dir_all(path)
+        fs::create_dir_all(path)
             .inspect_err(|error| eprintln!("Could not create directory {path:?}: {error}"))?
     }
-    set_current_dir(path)
+    env::set_current_dir(path)
         .inspect_err(|error| eprintln!("Could not change directory to {path:?}: {error}"))?;
     Ok(())
 }
@@ -146,7 +137,7 @@ fn ensure_temporary_directory(path: &Path, create: bool) -> Result<TempDir> {
     };
     let directory = directory.and_then(squash_empty_path);
     if let (Some(directory), true) = (directory, create) {
-        create_dir_all(directory)
+        fs::create_dir_all(directory)
             .inspect_err(|error| eprintln!("Could not create directory {directory:?}: {error}"))?
     }
     let tempdir = if let Some(directory) = directory {
@@ -159,7 +150,7 @@ fn ensure_temporary_directory(path: &Path, create: bool) -> Result<TempDir> {
             eprintln!("Could not create temporary directory in {directory:?}: {error}")
         })?
     };
-    set_current_dir(&tempdir)
+    env::set_current_dir(&tempdir)
         .inspect_err(|error| eprintln!("Could not change directory to {tempdir:?}: {error}"))?;
     Ok(tempdir)
 }
