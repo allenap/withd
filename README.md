@@ -37,34 +37,44 @@ be a source of confusion – and a disruptive and very difficult to diagnose bug
 $ withd --help
 Run a command in another directory.
 
-Usage: withd [OPTIONS] <DIRECTORY> <COMMAND> [ARGS]...
+Usage: withd [OPTIONS] <DIRECTORY> [COMMAND]...
 
 Arguments:
   <DIRECTORY>
           The directory in which to execute the command.
 
-  <COMMAND>
-          The command to execute.
+  [COMMAND]...
+          The command and its arguments.
 
-  [ARGS]...
-          The arguments to pass to the command.
+          [env: SHELL=/opt/homebrew/bin/bash]
 
 Options:
   -c, --create
           Create the directory if it does not exist.
 
   -t, --temporary
-          Create a temporary directory within DIRECTORY. This temporary directory will be deleted when the command completes. Note that this option modifies slightly how the DIRECTORY argument is used. For example:
+          Create a temporary directory within DIRECTORY. This temporary
+          directory will be deleted when the command completes. Note that this
+          option modifies slightly how the DIRECTORY argument is used. For
+          example:
 
-          - `withd -tc foo/bar.XXXX.baz …` will create the directory `foo` (and will not remove it later on) and a temporary directory inside it called `bar.1234.baz` (where the 1234 is random).
+          - `withd -tc foo/bar.XXXX.baz …` will create the directory `foo` (and
+          will not remove it later on) and a temporary directory inside it
+          called `bar.1234.baz` (where the 1234 is random).
 
-          - `withd -tc foo …` will create `foo`, as above, and a temporary directory inside it named `.tmp123456` (again, where 123456 is random).
+          - `withd -tc foo …` will create `foo`, as above, and a temporary
+          directory inside it named `.tmp123456` (again, where 123456 is
+          random).
 
-          - `withd -t foo …` will create a temporary directory named `.tmp123456` (again, where 123456 is random) in `foo`, but assumes that `foo` already exists.
+          - `withd -t foo …` will create a temporary directory named
+          `.tmp123456` (again, where 123456 is random) in `foo`, but assumes
+          that `foo` already exists.
 
-          - `withd -t foo.XXXX.bar …` will create a temporary directory named `foo.1234.bar` in the system's temporary directory, e.g. $TMPDIR.
+          - `withd -t foo.XXXX.bar …` will create a temporary directory named
+          `foo.1234.bar` in the system's temporary directory, e.g. $TMPDIR.
 
-          - `withd -t "" …` will create a temporary directory named `.tmp123456` in the system's temporary directory, e.g. $TMPDIR.
+          - `withd -t "" …` will create a temporary directory named `.tmp123456`
+          in the system's temporary directory, e.g. $TMPDIR.
 
   -h, --help
           Print help (see a summary with '-h')
@@ -72,7 +82,8 @@ Options:
   -V, --version
           Print version
 
-Execute a command in a specific directory.
+The executed command can use the `WHENCE` environment variable to refer back to
+the directory from whence `withd` was invoked.
 ```
 
 ## Installation
@@ -102,7 +113,7 @@ withd -c /some/where echo "Hello, world!"
 1. Regenerate shell completions: `cargo completions`.
 2. Bump version in [`Cargo.toml`](Cargo.toml).
 3. Paste updated `--help` output into [`README.md`](README.md) (this file; see
-   near the top). On macOS the command `cargo run -- --help | pbcopy` is
+   near the top). On macOS the command `cargo withd --help | pbcopy` is
    helpful. **Note** that `--help` output is not the same as `-h` output: it's
    more verbose and that's actually what we want here.
 4. Build **and** test. The latter on its own does do a build, but a test build
