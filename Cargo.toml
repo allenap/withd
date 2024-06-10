@@ -7,7 +7,7 @@ repository = "https://github.com/allenap/withd"
 readme = "README.md"
 keywords = ["cd", "cdpath"]
 categories = ["command-line-utilities"]
-version = "0.3.0"
+version = "0.3.1"
 edition = "2021"
 
 [[bin]]
