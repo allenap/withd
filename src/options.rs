@@ -62,7 +62,7 @@ pub(crate) struct Options {
     )]
     pub(crate) temporary: bool,
 
-    #[arg(help = "The command to execute.")]
+    #[arg(help = "The command to execute.", env = "SHELL")]
     pub(crate) command: OsString,
 
     #[arg(
