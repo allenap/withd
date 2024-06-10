@@ -2,6 +2,7 @@ use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
 
 use clap::{command, Parser, ValueHint};
+use clap_complete::Shell;
 
 #[derive(Parser)]
 #[command(
@@ -62,6 +63,14 @@ pub(crate) struct Options {
         default_value_t = false
     )]
     pub(crate) temporary: bool,
+
+    #[arg(
+        long,
+        hide = true,
+        help = "Generate shell completions.",
+        // exclusive = true
+    )]
+    pub(crate) completions: Option<Shell>,
 
     #[arg(
         help = "The command and its arguments.",
