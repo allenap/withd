@@ -20,7 +20,7 @@ path = "src/completions.rs"
 doc = false
 
 [dependencies]
-clap_complete = "=4.5.5"
+clap_complete = "=4.5.7"
 tempfile = "=3.10.1"
 thiserror = "=1.0.61"
 
