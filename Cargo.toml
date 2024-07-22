@@ -22,7 +22,7 @@ doc = false
 [dependencies]
 clap_complete = "=4.5.5"
 tempfile = "=3.10.1"
-thiserror = "=1.0.61"
+thiserror = "=1.0.63"
 
 [dependencies.bstr]
 version = "=1.9.1"
