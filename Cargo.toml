@@ -34,7 +34,7 @@ version = "=4.5.23"
 features = ["derive", "env", "wrap_help"]
 
 [dependencies.lazy-regex]
-version = "=3.3.0"
+version = "=3.4.1"
 features = ["regex"]
 default-features = false
 
