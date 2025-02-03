@@ -20,21 +20,21 @@ path = "src/completions.rs"
 doc = false
 
 [dependencies]
-clap_complete = "=4.5.40"
-tempfile = "=3.14.0"
-thiserror = "=2.0.9"
+clap_complete = "=4.5.44"
+tempfile = "=3.16.0"
+thiserror = "=2.0.11"
 
 [dependencies.bstr]
-version = "=1.11.1"
+version = "=1.11.3"
 features = ["std"]
 default-features = false
 
 [dependencies.clap]
-version = "=4.5.23"
+version = "=4.5.27"
 features = ["derive", "env", "wrap_help"]
 
 [dependencies.lazy-regex]
-version = "=3.3.0"
+version = "=3.4.1"
 features = ["regex"]
 default-features = false
 
