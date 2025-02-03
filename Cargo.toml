@@ -21,7 +21,7 @@ doc = false
 
 [dependencies]
 clap_complete = "=4.5.40"
-tempfile = "=3.14.0"
+tempfile = "=3.16.0"
 thiserror = "=2.0.9"
 
 [dependencies.bstr]
