@@ -45,7 +45,7 @@ Arguments:
 
   [COMMAND]...
           The command and its arguments.
-
+          
           [env: SHELL=/opt/homebrew/bin/bash]
 
 Options:
@@ -57,22 +57,22 @@ Options:
           directory will be deleted when the command completes. Note that this
           option modifies slightly how the DIRECTORY argument is used. For
           example:
-
+          
           - `withd -tc foo/bar.XXXX.baz …` will create the directory `foo` (and
           will not remove it later on) and a temporary directory inside it
           called `bar.1234.baz` (where the 1234 is random).
-
+          
           - `withd -tc foo …` will create `foo`, as above, and a temporary
           directory inside it named `.tmp123456` (again, where 123456 is
           random).
-
+          
           - `withd -t foo …` will create a temporary directory named
           `.tmp123456` (again, where 123456 is random) in `foo`, but assumes
           that `foo` already exists.
-
+          
           - `withd -t foo.XXXX.bar …` will create a temporary directory named
           `foo.1234.bar` in the system's temporary directory, e.g. $TMPDIR.
-
+          
           - `withd -t "" …` will create a temporary directory named `.tmp123456`
           in the system's temporary directory, e.g. $TMPDIR.
 
