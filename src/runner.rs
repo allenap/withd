@@ -6,7 +6,7 @@ use lazy_regex::bytes_regex_captures;
 use tempfile::{Builder as TempBuilder, TempDir};
 
 #[cfg(unix)]
-use nix::sys::signal::{signal, SigHandler, Signal};
+use nix::sys::signal::{SigHandler, Signal, signal};
 
 use crate::error;
 use crate::options;

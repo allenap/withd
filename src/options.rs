@@ -1,7 +1,7 @@
 use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
 
-use clap::{command, Parser, ValueHint};
+use clap::{Parser, ValueHint};
 
 #[derive(Parser)]
 #[command(
