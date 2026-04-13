@@ -18,6 +18,11 @@ doc = false
 name = "completions"
 path = "src/completions.rs"
 doc = false
+required-features = ["develop"]
+
+[features]
+# Development-time flag to enable the `completions` binary.
+develop = []
 
 [dependencies]
 clap_complete = "=4.6.1"
